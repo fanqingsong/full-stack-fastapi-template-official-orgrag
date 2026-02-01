@@ -173,7 +173,7 @@ services:
 
   # Qdrant - Vector Database for Semantic Search
   qdrant:
-    image: qdrant/qdrant:v1.9.5
+    image: qdrant/qdrant:v1.16.3
     restart: always
     volumes:
       - qdrant-data:/qdrant/storage
