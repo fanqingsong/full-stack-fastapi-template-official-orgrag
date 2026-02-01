@@ -2,14 +2,20 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, UploadFile, Query, Form
 from fastapi.responses import Response
 from sqlmodel import func, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.minio import minio_client
-from app.crud import delete_file, get_file_by_id, get_files_by_owner, get_files_count_by_owner
-from app.models import File, FileCreate, FilePublic, FilesPublic, Message
+from app.crud import (
+    check_file_access,
+    delete_file,
+    get_file_by_id,
+    get_files_by_owner,
+    get_files_count_by_owner,
+)
+from app.models import File, FileCreate, FileFunctionLink, FilePublic, FilesPublic, Message
 
 logger = logging.getLogger(__name__)
 
@@ -47,17 +53,23 @@ def read_file(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> 
     file = get_file_by_id(session=session, file_id=id)
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
-    if not current_user.is_superuser and (file.owner_id != current_user.id):
+    if not check_file_access(session=session, file=file, user=current_user):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     return file
 
 
 @router.post("/upload", response_model=FilePublic)
 async def upload_file(
-    *, session: SessionDep, current_user: CurrentUser, file: UploadFile
+    *,
+    session: SessionDep,
+    current_user: CurrentUser,
+    file: UploadFile,
+    responsible_function_id: uuid.UUID | None = Query(None, description="Function that uploaded this file"),
+    visible_bu_id: uuid.UUID | None = Query(None, description="BU that can view this file"),
+    visible_function_ids: str | None = Query(None, description="Comma-separated function IDs that can view this file"),
 ) -> Any:
     """
-    Upload a new file.
+    Upload a new file with optional organization permissions.
     """
     logger.info(f"[UPLOAD START] User: {current_user.id}, File object: {file}, Filename: {file.filename}")
 
@@ -98,6 +110,14 @@ async def upload_file(
         logger.error(f"[UPLOAD ERROR] Unexpected error during MinIO upload: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"MinIO upload error: {e}") from e
 
+    # Parse visible_function_ids if provided
+    parsed_function_ids = None
+    if visible_function_ids:
+        try:
+            parsed_function_ids = [uuid.UUID(fid.strip()) for fid in visible_function_ids.split(",")]
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Invalid function IDs format")
+
     # Save file metadata to database
     logger.info(f"[UPLOAD] Saving metadata to database...")
     try:
@@ -106,10 +126,20 @@ async def upload_file(
             original_filename=file.filename or "unnamed",
             content_type=content_type,
             file_size=file_size,
+            responsible_function_id=responsible_function_id,
+            visible_bu_id=visible_bu_id,
+            visible_function_ids=parsed_function_ids,
         )
 
         db_file = File.model_validate(file_in, update={"owner_id": current_user.id})
         session.add(db_file)
+
+        # Handle many-to-many relationships for visible_functions
+        if parsed_function_ids:
+            for func_id in parsed_function_ids:
+                link = FileFunctionLink(file_id=db_file.id, function_id=func_id)
+                session.add(link)
+
         session.commit()
         session.refresh(db_file)
         logger.info(f"[UPLOAD SUCCESS] File saved to database: {db_file.id}")
@@ -133,7 +163,7 @@ def download_file(
     if not file:
         logger.error(f"[DOWNLOAD ERROR] File not found: {id}")
         raise HTTPException(status_code=404, detail="File not found")
-    if not current_user.is_superuser and (file.owner_id != current_user.id):
+    if not check_file_access(session=session, file=file, user=current_user):
         logger.error(f"[DOWNLOAD ERROR] Permission denied for user {current_user.id} on file {id}")
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
@@ -163,7 +193,7 @@ def get_file_url(
     file = get_file_by_id(session=session, file_id=id)
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
-    if not current_user.is_superuser and (file.owner_id != current_user.id):
+    if not check_file_access(session=session, file=file, user=current_user):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     try:
@@ -183,7 +213,7 @@ def delete_file_endpoint(
     file = get_file_by_id(session=session, file_id=id)
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
-    if not current_user.is_superuser and (file.owner_id != current_user.id):
+    if not check_file_access(session=session, file=file, user=current_user):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     # Delete from MinIO

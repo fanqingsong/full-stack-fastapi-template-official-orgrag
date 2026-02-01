@@ -2,7 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute, redirect } from "@tanstack/react-router"
 import { Suspense } from "react"
 
-import { type UserPublic, usersReadUsers, usersReadUserMe } from "@/client"
+import { type UserPublic, UsersService } from "@/client"
 import AddUser from "@/components/Admin/AddUser"
 import { columns, type UserTableData } from "@/components/Admin/columns"
 import { DataTable } from "@/components/Common/DataTable"
@@ -12,11 +12,7 @@ import useAuth from "@/hooks/useAuth"
 function getUsersQueryOptions() {
   return {
     queryFn: async () => {
-      const response = await usersReadUsers({ query: { skip: 0, limit: 100 } })
-      if (response.error) {
-        throw response.error
-      }
-      return response.data
+      return await UsersService.readUsers({ skip: 0, limit: 100 })
     },
     queryKey: ["users"],
   }
@@ -25,10 +21,12 @@ function getUsersQueryOptions() {
 export const Route = createFileRoute("/_layout/admin")({
   component: Admin,
   beforeLoad: async () => {
-    const response = await usersReadUserMe()
-    if (response.error) {
+    let user: UserPublic
+    try {
+      user = await UsersService.readUserMe()
+    } catch (error) {
       // Clear invalid token and redirect to login on authentication errors
-      const err = response.error as { detail?: string }
+      const err = error as { detail?: string }
       if (err.detail === "Could not validate credentials" || err.detail?.includes("not authenticated")) {
         localStorage.removeItem("access_token")
       }
@@ -36,7 +34,7 @@ export const Route = createFileRoute("/_layout/admin")({
         to: "/login",
       })
     }
-    if (!response.data.is_superuser) {
+    if (!user.is_superuser) {
       throw redirect({
         to: "/",
       })

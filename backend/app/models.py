@@ -16,6 +16,8 @@ class UserBase(SQLModel):
     is_active: bool = True
     is_superuser: bool = False
     full_name: str | None = Field(default=None, max_length=255)
+    business_unit_id: uuid.UUID | None = Field(default=None, foreign_key="businessunit.id")
+    function_id: uuid.UUID | None = Field(default=None, foreign_key="function.id")
 
 
 # Properties to receive via API on creation
@@ -55,6 +57,8 @@ class User(UserBase, table=True):
     )
     items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
     files: list["File"] = Relationship(back_populates="owner", cascade_delete=True)
+    business_unit: "BusinessUnit" = Relationship(back_populates="users")
+    function: "Function" = Relationship(back_populates="users")
 
 
 # Properties to return via API, id is always required
@@ -130,12 +134,109 @@ class NewPassword(SQLModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+# =============================================================================
+# Organization Models - Must be defined before File
+# =============================================================================
+
+# BusinessUnit models
+class BusinessUnitBase(SQLModel):
+    name: str = Field(max_length=255, unique=True, index=True)
+    code: str = Field(max_length=50, unique=True)
+    description: str | None = Field(default=None, max_length=500)
+    is_active: bool = True
+
+
+class BusinessUnitCreate(BusinessUnitBase):
+    pass
+
+
+class BusinessUnitUpdate(SQLModel):
+    name: str | None = Field(default=None, max_length=255)
+    code: str | None = Field(default=None, max_length=50)
+    description: str | None = Field(default=None, max_length=500)
+    is_active: bool | None = None
+
+
+class BusinessUnit(BusinessUnitBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(default_factory=get_datetime_utc)
+    users: list["User"] = Relationship(back_populates="business_unit")
+    functions: list["Function"] = Relationship(back_populates="business_unit")
+    files_visible: list["File"] = Relationship(back_populates="visible_bu")
+
+
+class BusinessUnitPublic(BusinessUnitBase):
+    id: uuid.UUID
+    created_at: datetime | None = None
+
+
+class BusinessUnitsPublic(SQLModel):
+    data: list[BusinessUnitPublic]
+    count: int
+
+
+# Function models
+class FunctionBase(SQLModel):
+    name: str = Field(max_length=255)
+    code: str = Field(max_length=50)
+    description: str | None = Field(default=None, max_length=500)
+    is_active: bool = True
+    business_unit_id: uuid.UUID = Field(foreign_key="businessunit.id")
+
+
+class FunctionCreate(FunctionBase):
+    pass
+
+
+class FunctionUpdate(SQLModel):
+    name: str | None = Field(default=None, max_length=255)
+    code: str | None = Field(default=None, max_length=50)
+    description: str | None = Field(default=None, max_length=500)
+    is_active: bool | None = None
+    business_unit_id: uuid.UUID | None = None
+
+
+class Function(FunctionBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(default_factory=get_datetime_utc)
+    business_unit: BusinessUnit = Relationship(back_populates="functions")
+    users: list["User"] = Relationship(back_populates="function")
+    files_uploaded: list["File"] = Relationship(back_populates="responsible_function")
+    files_visible: list["File"] = Relationship(back_populates="visible_functions")
+
+
+class FunctionPublic(FunctionBase):
+    id: uuid.UUID
+    created_at: datetime | None = None
+
+
+class FunctionsPublic(SQLModel):
+    data: list[FunctionPublic]
+    count: int
+
+
+# FileFunctionLink - Association table for File <-> Function many-to-many
+# Must be defined before File since File references it
+class FileFunctionLink(SQLModel, table=True):
+    file_id: uuid.UUID = Field(
+        foreign_key="file.id", primary_key=True, ondelete="CASCADE"
+    )
+    function_id: uuid.UUID = Field(
+        foreign_key="function.id", primary_key=True, ondelete="CASCADE"
+    )
+
+
+# =============================================================================
+# File Models
+# =============================================================================
+
 # Shared properties
 class FileBase(SQLModel):
     filename: str = Field(max_length=255)
     original_filename: str = Field(max_length=255)
     content_type: str = Field(max_length=100)
     file_size: int
+    responsible_function_id: uuid.UUID | None = Field(default=None, foreign_key="function.id")
 
 
 class FileCreate(SQLModel):
@@ -143,6 +244,9 @@ class FileCreate(SQLModel):
     original_filename: str = Field(max_length=255)
     content_type: str = Field(max_length=100)
     file_size: int
+    responsible_function_id: uuid.UUID | None = None
+    visible_bu_id: uuid.UUID | None = None
+    visible_function_ids: list[uuid.UUID] | None = None
 
 
 class FileUpdate(SQLModel):
@@ -159,7 +263,13 @@ class File(FileBase, table=True):
     owner_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
     )
+    visible_bu_id: uuid.UUID | None = Field(default=None, foreign_key="businessunit.id")
     owner: User | None = Relationship(back_populates="files")
+    responsible_function: "Function" = Relationship(back_populates="files_uploaded")
+    visible_bu: "BusinessUnit" = Relationship(back_populates="files_visible")
+    visible_functions: list["Function"] = Relationship(
+        back_populates="files_visible", link_model=FileFunctionLink
+    )
 
 
 class FilePublic(FileBase):

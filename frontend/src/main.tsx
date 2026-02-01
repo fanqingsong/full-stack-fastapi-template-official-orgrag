@@ -7,27 +7,52 @@ import {
 import { createRouter, RouterProvider } from "@tanstack/react-router"
 import { StrictMode } from "react"
 import ReactDOM from "react-dom/client"
-import { client } from "./client/client.gen"
+import { OpenAPI } from "./client"
 import { ThemeProvider } from "./components/theme-provider"
 import { Toaster } from "./components/ui/sonner"
 import "./index.css"
 import { routeTree } from "./routeTree.gen"
 
-// Configure the API client
-client.setConfig({
-  baseUrl: import.meta.env.VITE_API_URL,
-  auth: async () => {
-    // SDK automatically adds 'Bearer ' prefix for bearer scheme
-    return localStorage.getItem("access_token") || undefined
-  },
+// Configure the OpenAPI client
+OpenAPI.BASE = import.meta.env.VITE_API_URL || ""
+OpenAPI.interceptors.request.use((options) => {
+  const token = localStorage.getItem("access_token")
+  if (token) {
+    return {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  }
+  return options
 })
 
 const handleApiError = (error: Error) => {
-  const err = error as { status?: number; response?: { status?: number } }
+  const err = error as {
+    status?: number
+    response?: { status?: number }
+    detail?: string
+    message?: string
+  }
   const status = err.status || err.response?.status
+  const detail = err.detail || err.message
+
+  console.log("API Error:", { status, detail, error: err })
+
+  // Clear token and redirect on auth errors (401, 403)
   if (status && [401, 403].includes(status)) {
     localStorage.removeItem("access_token")
     window.location.href = "/login"
+    return
+  }
+
+  // Handle "User not found" - check detail message directly since status might be undefined
+  if (detail === "User not found" || detail?.toLowerCase().includes("user not found")) {
+    localStorage.removeItem("access_token")
+    window.location.href = "/login"
+    return
   }
 }
 const queryClient = new QueryClient({

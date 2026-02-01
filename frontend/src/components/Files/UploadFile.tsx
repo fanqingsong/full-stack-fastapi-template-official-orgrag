@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Upload as UploadIcon } from "lucide-react"
+import { Upload as UploadIcon, Shield } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -21,10 +21,19 @@ import {
   FormControl,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import useCustomToast from "@/hooks/useCustomToast"
 import { handleError } from "@/utils"
 
@@ -34,6 +43,9 @@ const formSchema = z.object({
     .refine((file: File) => file.name && file.name.trim().length > 0, {
       message: "File name cannot be empty",
     }),
+  responsible_function_id: z.string().uuid().optional(),
+  visible_bu_id: z.string().uuid().optional(),
+  visible_function_ids: z.string().optional(),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -47,16 +59,36 @@ const UploadFile = () => {
     resolver: zodResolver(formSchema),
     mode: "onBlur",
     criteriaMode: "all",
+    defaultValues: {
+      file: undefined,
+      responsible_function_id: undefined,
+      visible_bu_id: undefined,
+      visible_function_ids: undefined,
+    },
   })
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       const formData = new FormData()
       formData.append("file", data.file)
+
+      // Add permission parameters as query params
+      const params = new URLSearchParams()
+      if (data.responsible_function_id) {
+        params.append("responsible_function_id", data.responsible_function_id)
+      }
+      if (data.visible_bu_id) {
+        params.append("visible_bu_id", data.visible_bu_id)
+      }
+      if (data.visible_function_ids) {
+        params.append("visible_function_ids", data.visible_function_ids)
+      }
+
       // Get authentication token
       const token = localStorage.getItem("access_token")
       // Use fetch directly to handle file upload
-      const response = await fetch("/api/v1/files/upload", {
+      const url = `/api/v1/files/upload${params.toString() ? "?" + params.toString() : ""}`
+      const response = await fetch(url, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
@@ -110,7 +142,7 @@ const UploadFile = () => {
         <DialogHeader>
           <DialogTitle>Upload File</DialogTitle>
           <DialogDescription>
-            Select a file to upload to MinIO storage.
+            Select a file to upload and configure access permissions.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -119,7 +151,7 @@ const UploadFile = () => {
               <FormField
                 control={form.control}
                 name="file"
-                render={({ field }) => (
+                render={() => (
                   <FormItem>
                     <FormControl>
                       <Input
@@ -132,6 +164,79 @@ const UploadFile = () => {
                   </FormItem>
                 )}
               />
+
+              {/* Permission Configuration Section */}
+              <div className="border-t pt-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Shield className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-medium">File Permissions (Optional)</h3>
+                </div>
+
+                <div className="grid gap-4">
+                  <FormField
+                    control={form.control}
+                    name="responsible_function_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Responsible Function</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Which function uploaded this?" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {/* TODO: Load from API after client regeneration */}
+                            <SelectItem value="placeholder">Select Function...</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="visible_bu_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Visible to Business Unit</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Which BU can view? (Optional)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {/* TODO: Load from API after client regeneration */}
+                            <SelectItem value="">All Users (Public)</SelectItem>
+                            <SelectItem value="placeholder">Select BU...</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="visible_function_ids"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Visible to Functions</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Comma-separated function IDs (e.g., id1,id2,id3)"
+                            className="resize-none"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
             </div>
 
             <DialogFooter>

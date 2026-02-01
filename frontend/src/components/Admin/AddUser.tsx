@@ -5,7 +5,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
-import { type UserCreate, usersCreateUser } from "@/client"
+import { type UserCreate, UsersService } from "@/client"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -28,6 +28,13 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import useCustomToast from "@/hooks/useCustomToast"
 import { handleError } from "@/utils"
 
@@ -44,6 +51,8 @@ const formSchema = z
       .min(1, { message: "Please confirm your password" }),
     is_superuser: z.boolean(),
     is_active: z.boolean(),
+    business_unit_id: z.string().uuid().optional(),
+    function_id: z.string().uuid().optional(),
   })
   .refine((data) => data.password === data.confirm_password, {
     message: "The passwords don't match",
@@ -68,12 +77,14 @@ const AddUser = () => {
       confirm_password: "",
       is_superuser: false,
       is_active: false,
+      business_unit_id: undefined,
+      function_id: undefined,
     },
   })
 
   const mutation = useMutation({
     mutationFn: (data: UserCreate) =>
-      usersCreateUser({ body: data }),
+      UsersService.createUser({ requestBody: data }),
     onSuccess: () => {
       showSuccessToast("User created successfully")
       form.reset()
@@ -216,6 +227,52 @@ const AddUser = () => {
                   </FormItem>
                 )}
               />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="business_unit_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Business Unit</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select BU" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {/* TODO: Load from API after client regeneration */}
+                          <SelectItem value="placeholder">Select BU...</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="function_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Function</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Function" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {/* TODO: Load from API after client regeneration */}
+                          <SelectItem value="placeholder">Select Function...</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
 
             <DialogFooter>

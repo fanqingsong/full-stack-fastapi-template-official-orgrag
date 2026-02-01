@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { Search } from "lucide-react"
 import { Suspense } from "react"
 
-import { itemsReadItems } from "@/client"
+import { ItemsService } from "@/client"
 import { DataTable } from "@/components/Common/DataTable"
 import AddItem from "@/components/Items/AddItem"
 import { columns } from "@/components/Items/columns"
@@ -12,11 +12,7 @@ import PendingItems from "@/components/Pending/PendingItems"
 function getItemsQueryOptions() {
   return {
     queryFn: async () => {
-      const response = await itemsReadItems({ query: { skip: 0, limit: 100 } })
-      if (response.error) {
-        throw response.error
-      }
-      return response.data
+      return await ItemsService.readItems({ skip: 0, limit: 100 })
     },
     queryKey: ["items"],
   }

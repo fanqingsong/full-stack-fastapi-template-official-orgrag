@@ -62,6 +62,24 @@ def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
             detail="The user with this email already exists in the system.",
         )
 
+    # Validate business_unit_id if provided
+    if user_in.business_unit_id:
+        bu = crud.get_business_unit_by_id(session=session, bu_id=user_in.business_unit_id)
+        if not bu:
+            raise HTTPException(
+                status_code=404,
+                detail="Business unit not found",
+            )
+
+    # Validate function_id if provided
+    if user_in.function_id:
+        func = crud.get_function_by_id(session=session, func_id=user_in.function_id)
+        if not func:
+            raise HTTPException(
+                status_code=404,
+                detail="Function not found",
+            )
+
     user = crud.create_user(session=session, user_create=user_in)
     if settings.emails_enabled and user_in.email:
         email_data = generate_new_account_email(
@@ -202,6 +220,24 @@ def update_user(
         if existing_user and existing_user.id != user_id:
             raise HTTPException(
                 status_code=409, detail="User with this email already exists"
+            )
+
+    # Validate business_unit_id if provided
+    if user_in.business_unit_id:
+        bu = crud.get_business_unit_by_id(session=session, bu_id=user_in.business_unit_id)
+        if not bu:
+            raise HTTPException(
+                status_code=404,
+                detail="Business unit not found",
+            )
+
+    # Validate function_id if provided
+    if user_in.function_id:
+        func = crud.get_function_by_id(session=session, func_id=user_in.function_id)
+        if not func:
+            raise HTTPException(
+                status_code=404,
+                detail="Function not found",
             )
 
     db_user = crud.update_user(session=session, db_user=db_user, user_in=user_in)

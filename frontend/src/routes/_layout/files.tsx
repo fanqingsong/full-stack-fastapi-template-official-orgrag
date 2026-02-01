@@ -1,9 +1,9 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { FileText, Upload } from "lucide-react"
+import { FileText } from "lucide-react"
 import { Suspense } from "react"
 
-import { filesReadFiles } from "@/client"
+import { FilesService } from "@/client"
 import { DataTable } from "@/components/Common/DataTable"
 import UploadFile from "@/components/Files/UploadFile"
 import { fileColumns } from "@/components/Files/fileColumns"
@@ -12,11 +12,7 @@ import PendingItems from "@/components/Pending/PendingItems"
 function getFilesQueryOptions() {
   return {
     queryFn: async () => {
-      const response = await filesReadFiles({ query: { skip: 0, limit: 100 } })
-      if (response.error) {
-        throw response.error
-      }
-      return response.data
+      return await FilesService.readFiles({ skip: 0, limit: 100 })
     },
     queryKey: ["files"],
   }

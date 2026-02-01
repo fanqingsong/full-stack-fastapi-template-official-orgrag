@@ -5,7 +5,6 @@ import { formatDistanceToNow } from "date-fns"
 import type { FilePublic } from "@/client"
 import { Button } from "@/components/ui/button"
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard"
-import { cn } from "@/lib/utils"
 import { FileActionsMenu } from "./FileActionsMenu"
 
 function CopyId({ id }: { id: string }) {

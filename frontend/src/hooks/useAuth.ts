@@ -2,9 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 
 import {
-  loginLoginAccessToken,
-  usersReadUserMe,
-  usersRegisterUser,
+  LoginService,
+  UsersService,
   type Body_login_login_access_token as AccessToken,
   type UserPublic,
   type UserRegister,
@@ -24,18 +23,15 @@ const useAuth = () => {
   const { data: user } = useQuery<UserPublic | null, Error>({
     queryKey: ["currentUser"],
     queryFn: async () => {
-      const response = await usersReadUserMe() as { error?: any; response?: { status: number }; data: any }
-      // Check for error in response
-      if (response.error) {
-        // Check HTTP status from response object
-        const status = response.response?.status
-        const errDetail = response.error?.detail
-
+      try {
+        return await UsersService.readUserMe()
+      } catch (error) {
+        const err = error as { detail?: string; status?: number }
         // Handle authentication errors (401, 403)
-        if (status === 401 || status === 403 ||
-            errDetail === "Could not validate credentials" ||
-            errDetail?.includes("not authenticated") ||
-            errDetail?.includes("Not authenticated")) {
+        if (err.status === 401 || err.status === 403 ||
+            err.detail === "Could not validate credentials" ||
+            err.detail?.includes("not authenticated") ||
+            err.detail?.includes("Not authenticated")) {
           // Clear the invalid token immediately
           localStorage.removeItem("access_token")
           queryClient.setQueryData(["currentUser"], null)
@@ -45,9 +41,8 @@ const useAuth = () => {
           }
           return null
         }
-        throw response.error
+        throw error
       }
-      return response.data
     },
     enabled: isLoggedIn(),
     retry: false,
@@ -55,7 +50,7 @@ const useAuth = () => {
 
   const signUpMutation = useMutation({
     mutationFn: (data: UserRegister) =>
-      usersRegisterUser({ body: data }),
+      UsersService.registerUser({ requestBody: data }),
     onSuccess: () => {
       navigate({ to: "/login" })
     },
@@ -66,11 +61,8 @@ const useAuth = () => {
   })
 
   const login = async (data: AccessToken) => {
-    const response = await loginLoginAccessToken({ body: data })
-    if (response.error) {
-      throw response.error
-    }
-    localStorage.setItem("access_token", response.data.access_token)
+    const response = await LoginService.loginAccessToken({ formData: data })
+    localStorage.setItem("access_token", response.access_token)
   }
 
   const loginMutation = useMutation({

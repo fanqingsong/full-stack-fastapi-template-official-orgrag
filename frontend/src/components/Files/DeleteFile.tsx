@@ -3,7 +3,7 @@ import { Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 
-import { filesDeleteFileEndpoint } from "@/client"
+import { FilesService } from "@/client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -32,7 +32,7 @@ const DeleteFile = ({ id, filename, onSuccess }: DeleteFileProps) => {
   const { handleSubmit } = useForm()
 
   const deleteFile = async (id: string) => {
-    await filesDeleteFileEndpoint({ path: { id } })
+    await FilesService.deleteFileEndpoint({ id })
   }
 
   const mutation = useMutation({

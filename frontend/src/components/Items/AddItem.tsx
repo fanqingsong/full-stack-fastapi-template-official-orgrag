@@ -5,7 +5,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
-import { type ItemCreate, itemsCreateItem } from "@/client"
+import { type ItemCreate, ItemsService } from "@/client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -54,7 +54,7 @@ const AddItem = () => {
 
   const mutation = useMutation({
     mutationFn: (data: ItemCreate) =>
-      itemsCreateItem({ body: data }),
+      ItemsService.createItem({ requestBody: data }),
     onSuccess: () => {
       showSuccessToast("Item created successfully")
       form.reset()
