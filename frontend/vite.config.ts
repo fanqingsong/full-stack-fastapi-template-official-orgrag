@@ -11,7 +11,8 @@ export default defineConfig(({ mode }) => {
 
   return {
     server: {
-      host: '0.0.0.0',
+      host: '0.0.0.0',  // Allow external access
+      strictPort: true,   // Fail if port is occupied
       proxy: {
         '/api': {
           // In Docker, use backend service name; for local dev, use localhost
