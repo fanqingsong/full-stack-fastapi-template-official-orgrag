@@ -10,7 +10,7 @@ redis>=5.0.1
 
 # Data processing
 pandas>=2.1.0
-numpy>=1.26.0
+numpy>=2.4.4
 
 # Async support
 aiohttp>=3.9.0
